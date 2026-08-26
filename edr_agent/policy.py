@@ -133,8 +133,32 @@ class PolicyEngine:
 
     def _handle_full_schedule(self, state: AgentState, mode: BookingMode) -> PolicyDecision:
         """Handle the case where schedules exist but all are full."""
-        # Same logic as no_schedule for routing purposes
-        return self._handle_no_schedule(state, mode)
+        if mode == BookingMode.SEAT_FIRST:
+            next_date = next_operating_date(state.current_date)
+            if next_date:
+                logger.info(f"[POLICY] SEAT-FIRST: train is fully booked on {state.current_date}, advancing to {next_date}")
+                return PolicyDecision(
+                    action=PolicyAction.ADVANCE_DATE,
+                    reason=f"SEAT-FIRST: schedule fully booked on {state.current_date}, trying next operating date",
+                    new_date=next_date,
+                    notification_message=f"🔄 Train fully booked on {state.current_date}, trying {next_date}",
+                )
+            else:
+                return PolicyDecision(
+                    action=PolicyAction.NOTIFY_AND_STOP,
+                    reason="SEAT-FIRST: no operating dates found within look-ahead window",
+                    notification_message="❌ Train is fully booked and no future available schedules were found.",
+                )
+
+        # NORMAL and DATE-FIRST: stop
+        return PolicyDecision(
+            action=PolicyAction.NOTIFY_AND_STOP,
+            reason=f"Train is fully booked for {state.current_date}",
+            notification_message=(
+                f"❌ The train is fully booked for {state.current_date} "
+                f"on the {state.origin} → {state.destination} route."
+            ),
+        )
 
     def _handle_seats(self, state: AgentState, mode: BookingMode) -> PolicyDecision:
         """Handle seat availability evaluation."""

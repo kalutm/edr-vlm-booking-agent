@@ -562,6 +562,39 @@
               <option value="VIP Bed Upper">VIP Bed Upper</option>
             </select>
           </div>
+          <div class="seat-rank-item">
+            <span class="rank-num">4</span>
+            <select id="rank-4" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat">Regular Seat</option>
+              <option value="Economy Bed Lower">Economy Bed Lower</option>
+              <option value="Economy Bed Middle" selected>Economy Bed Middle</option>
+              <option value="Economy Bed Upper">Economy Bed Upper</option>
+              <option value="VIP Bed Lower">VIP Bed Lower</option>
+              <option value="VIP Bed Upper">VIP Bed Upper</option>
+            </select>
+          </div>
+          <div class="seat-rank-item">
+            <span class="rank-num">5</span>
+            <select id="rank-5" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat">Regular Seat</option>
+              <option value="Economy Bed Lower">Economy Bed Lower</option>
+              <option value="Economy Bed Middle">Economy Bed Middle</option>
+              <option value="Economy Bed Upper" selected>Economy Bed Upper</option>
+              <option value="VIP Bed Lower">VIP Bed Lower</option>
+              <option value="VIP Bed Upper">VIP Bed Upper</option>
+            </select>
+          </div>
+          <div class="seat-rank-item">
+            <span class="rank-num">6</span>
+            <select id="rank-6" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat">Regular Seat</option>
+              <option value="Economy Bed Lower">Economy Bed Lower</option>
+              <option value="Economy Bed Middle">Economy Bed Middle</option>
+              <option value="Economy Bed Upper">Economy Bed Upper</option>
+              <option value="VIP Bed Lower">VIP Bed Lower</option>
+              <option value="VIP Bed Upper" selected>VIP Bed Upper</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -956,6 +989,9 @@
       document.getElementById('rank-1').value,
       document.getElementById('rank-2').value,
       document.getElementById('rank-3').value,
+      document.getElementById('rank-4').value,
+      document.getElementById('rank-5').value,
+      document.getElementById('rank-6').value,
     ] : [preferredSeat];
 
     document.getElementById('handoff-banner').classList.remove('visible');

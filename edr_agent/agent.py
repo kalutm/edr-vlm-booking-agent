@@ -177,6 +177,8 @@ class BookingAgent:
         await self._fill_booking_form()
         if state.terminated:
             return
+        if state.date_availability == DateAvailability.NOT_YET_OPEN:
+            return  # The cycle is aborted, but the monitoring loop continues
 
         # STEP 3: Single VLM pass — read schedule + seats from SEARCH_RESULTS
         state.transition(WorkflowStep.SEARCHING)
@@ -244,9 +246,24 @@ class BookingAgent:
         logger.info(f"[AGENT] Form fill results: {results}")
 
         # --- Date-blocked guard ---
-        # If the calendar day was unclickable (not-yet-open), EDRFormHelper signals
+        # If the calendar day was unclickable (not-yet-open or invalid), EDRFormHelper signals
         # this via date_blocked. We record the state and end the cycle — no VLM needed.
         if results.get("date_blocked"):
+            from edr_agent.date_logic import classify_date
+            status = classify_date(state.current_date, state.origin, state.destination)
+            
+            if status in ("NOT_OPERATING", "PAST"):
+                msg = (
+                    f"❌ Invalid date: {state.current_date} is not an operating day for the current route "
+                    f"for {state.origin} -> {state.destination} (or is in the past)."
+                )
+                logger.error(f"[AGENT] {msg}")
+                state.date_availability = DateAvailability.INVALID
+                self._emit_event(log_message=msg, is_error=True)
+                state.terminated = True
+                return
+
+            # Otherwise, it's a valid operating day, just not yet open for booking
             target = state.current_date.isoformat() if state.current_date else "requested date"
             msg = (
                 f"⏳ Bookings for {target} are not yet open in the booking calendar. "
@@ -255,7 +272,6 @@ class BookingAgent:
             logger.info(f"[AGENT] {msg}")
             state.date_availability = DateAvailability.NOT_YET_OPEN
             self._emit_event(log_message=msg, is_error=False)
-            state.terminated = True
             return
 
     async def _perceive_search_results(self) -> None:
@@ -276,6 +292,7 @@ class BookingAgent:
                 "button:has-text('Select'), "
                 ":has-text('No trains found'), "
                 ":has-text('No results'), "
+                ":has-text('Fully booked'), "
                 "[data-testid='select-schedule']",
                 timeout=15000,
             )

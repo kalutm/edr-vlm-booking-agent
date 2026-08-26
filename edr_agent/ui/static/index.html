@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EDR VLM Booking Agent — Control Panel</title>
+  <style>
+    :root {
+      --edr-green: #14714c;
+      --edr-dark: #0d4d33;
+      --edr-light: #e8f5ee;
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2d3148;
+      --text: #e2e8f0;
+      --text-muted: #8892a4;
+      --accent: #34d399;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --info: #60a5fa;
+      --font: 'Segoe UI', system-ui, sans-serif;
+      --mono: 'Consolas', 'Fira Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--edr-dark) 0%, #0a3d25 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--edr-green);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    header .subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 1px;
+    }
+
+    .connection-badge {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .connection-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      transition: background 0.3s;
+    }
+
+    .connection-dot.connected { background: var(--accent); }
+
+    /* ── Layout ── */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left panel (config) ── */
+    .left-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Right panel (status + logs) ── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .right-top {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-section {
+      padding: 16px 20px;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel-section:last-child { border-right: none; }
+
+    .log-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Form controls ── */
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus { border-color: var(--edr-green); }
+
+    .field { margin-bottom: 12px; }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--edr-green);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--edr-dark); }
+    .btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    .btn-danger {
+      background: rgba(239,68,68,0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239,68,68,0.3);
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    /* ── Status indicators ── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .status-row:last-child { border-bottom: none; }
+
+    .status-key { color: var(--text-muted); }
+    .status-val {
+      font-weight: 600;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    /* Step badge */
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(52,211,153,0.1);
+      color: var(--accent);
+      border: 1px solid rgba(52,211,153,0.2);
+    }
+
+    .step-badge.warning {
+      background: rgba(245,158,11,0.1);
+      color: var(--warn);
+      border-color: rgba(245,158,11,0.2);
+    }
+
+    .step-badge.danger {
+      background: rgba(239,68,68,0.1);
+      color: var(--danger);
+      border-color: rgba(239,68,68,0.2);
+    }
+
+    .step-badge.info {
+      background: rgba(96,165,250,0.1);
+      color: var(--info);
+      border-color: rgba(96,165,250,0.2);
+    }
+
+    /* Perception JSON display */
+    .json-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 220px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    /* Screenshot thumbnail */
+    .screenshot-thumb {
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-top: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .screenshot-thumb:hover { opacity: 0.85; }
+
+    /* Log lines */
+    .log-line {
+      padding: 2px 0;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      border-bottom: 1px solid rgba(45,49,72,0.4);
+      line-height: 1.4;
+    }
+
+    .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-step {
+      color: var(--info);
+      flex-shrink: 0;
+      min-width: 140px;
+      font-weight: 600;
+    }
+    .log-msg { color: var(--text); word-break: break-word; }
+    .log-line.error .log-msg { color: var(--danger); }
+    .log-line.warn .log-msg { color: var(--warn); }
+    .log-line.success .log-msg { color: var(--accent); }
+
+    /* Action display */
+    .action-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 12px;
+    }
+
+    .action-type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(96,165,250,0.15);
+      color: var(--info);
+      margin-bottom: 6px;
+    }
+
+    /* Seat ranking */
+    .seat-rank-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .seat-rank-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+    }
+
+    .rank-num {
+      background: var(--edr-green);
+      color: #fff;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .handoff-banner {
+      background: rgba(245,158,11,0.1);
+      border: 1px solid var(--warn);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--warn);
+      font-weight: 600;
+      font-size: 14px;
+      display: none;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .handoff-banner.visible { display: flex; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .section-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Feedback loop visual */
+    .loop-viz {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .loop-step {
+      padding: 3px 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .loop-step.active {
+      background: rgba(52,211,153,0.15);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .loop-arrow {
+      padding: 0 3px;
+      color: var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚂</div>
+    <div>
+      <h1>EDR VLM Booking Agent</h1>
+      <div class="subtitle">Ethiopian-Djibouti Railway · Visual Perception Agent</div>
+    </div>
+  </div>
+  <div class="connection-badge">
+    <div class="connection-dot" id="conn-dot"></div>
+    <span id="conn-label">Disconnected</span>
+  </div>
+</header>
+
+<div class="main-layout">
+
+  <!-- ═══════════════ LEFT: Configuration ═══════════════ -->
+  <div class="left-panel">
+
+    <!-- Human Handoff Banner -->
+    <div class="handoff-banner" id="handoff-banner">
+      <span>🤝</span>
+      <div>
+        <div>HUMAN HANDOFF REQUIRED</div>
+        <div id="handoff-reason" style="font-size:12px;font-weight:400;margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <!-- Route Configuration -->
+    <div class="card">
+      <div class="card-title">🗺️ Route</div>
+      <div class="field">
+        <label>From (Departure)</label>
+        <select id="origin">
+          <option value="">— Select station —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>To (Destination)</label>
+        <select id="destination">
+          <option value="">— Select station —</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Travel Date</label>
+          <input type="date" id="travel-date">
+        </div>
+        <div class="field">
+          <label>Passengers</label>
+          <select id="passengers">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Booking Policy -->
+    <div class="card">
+      <div class="card-title">⚙️ Booking Policy</div>
+      <div class="field">
+        <label>Mode</label>
+        <select id="booking-mode" onchange="onModeChange()">
+          <option value="NORMAL">NORMAL — Date + preferred seat</option>
+          <option value="SEAT_FIRST">SEAT-FIRST — Seat type drives date</option>
+          <option value="DATE_FIRST">DATE-FIRST — Date fixed, ranked seats</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Preferred Seat Type</label>
+        <select id="preferred-seat">
+          <option value="Regular Seat">Regular Seat</option>
+          <option value="Economy Bed Lower" selected>Economy Bed Lower</option>
+          <option value="Economy Bed Middle">Economy Bed Middle</option>
+          <option value="Economy Bed Upper">Economy Bed Upper</option>
+          <option value="VIP Bed Lower">VIP Bed Lower</option>
+          <option value="VIP Bed Upper">VIP Bed Upper</option>
+        </select>
+      </div>
+
+      <!-- Seat ranking (DATE-FIRST only) -->
+      <div id="seat-ranking-section" style="display:none;">
+        <label style="margin-top:8px;">Seat Ranking (DATE-FIRST)</label>
+        <div class="seat-rank-list">
+          <div class="seat-rank-item">
+            <span class="rank-num">1</span>
+            <select id="rank-1" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat" selected>Regular Seat</option>
+              <option value="Economy Bed Lower">Economy Bed Lower</option>
+              <option value="Economy Bed Middle">Economy Bed Middle</option>
+              <option value="Economy Bed Upper">Economy Bed Upper</option>
+              <option value="VIP Bed Lower">VIP Bed Lower</option>
+              <option value="VIP Bed Upper">VIP Bed Upper</option>
+            </select>
+          </div>
+          <div class="seat-rank-item">
+            <span class="rank-num">2</span>
+            <select id="rank-2" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat">Regular Seat</option>
+              <option value="Economy Bed Lower" selected>Economy Bed Lower</option>
+              <option value="Economy Bed Middle">Economy Bed Middle</option>
+              <option value="Economy Bed Upper">Economy Bed Upper</option>
+              <option value="VIP Bed Lower">VIP Bed Lower</option>
+              <option value="VIP Bed Upper">VIP Bed Upper</option>
+            </select>
+          </div>
+          <div class="seat-rank-item">
+            <span class="rank-num">3</span>
+            <select id="rank-3" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;padding:0;">
+              <option value="Regular Seat">Regular Seat</option>
+              <option value="Economy Bed Lower">Economy Bed Lower</option>
+              <option value="Economy Bed Middle">Economy Bed Middle</option>
+              <option value="Economy Bed Upper">Economy Bed Upper</option>
+              <option value="VIP Bed Lower" selected>VIP Bed Lower</option>
+              <option value="VIP Bed Upper">VIP Bed Upper</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monitoring -->
+    <div class="card">
+      <div class="card-title">⏱️ Monitoring</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Run Mode</label>
+          <select id="run-mode">
+            <option value="once">Run Once</option>
+            <option value="monitor">Monitor Loop</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Interval (min)</label>
+          <input type="number" id="monitor-interval" value="10" min="1" max="60">
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-start" onclick="startAgent()">
+        ▶ Start Agent
+      </button>
+      <button class="btn btn-danger" id="btn-stop" onclick="stopAgent()" disabled>
+        ■ Stop
+      </button>
+    </div>
+    <!-- Fayda Resume Banner: visible only while agent is paused at Fayda handoff -->
+    <div id="handoff-fayda-banner" style="display:none;margin-top:12px;padding:12px 14px;
+         background:linear-gradient(135deg,#92400e,#78350f);border:1px solid #f59e0b;
+         border-radius:8px;color:#fef3c7;font-size:13px;">
+      <div style="font-weight:700;margin-bottom:6px;">🤝 Fayda Verification Required</div>
+      <div style="margin-bottom:10px;line-height:1.5;">Complete Fayda verification in the browser, then click Resume to continue the booking workflow.</div>
+      <button class="btn" id="btn-resume" onclick="resumeAgent()"
+              style="background:#f59e0b;color:#000;font-weight:700;width:100%;">
+        ▶ Resume Agent
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ RIGHT: Status + Logs ═══════════════ -->
+  <div class="right-panel">
+    <div class="right-top">
+
+      <!-- Status Panel -->
+      <div class="panel-section">
+        <div class="section-header">📊 Agent Status</div>
+
+        <!-- Feedback loop visualizer -->
+        <div class="loop-viz" id="loop-viz">
+          <span class="loop-step" id="loop-observe">OBSERVE</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step" id="loop-perceive">PERCEIVE</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step" id="loop-update">UPDATE STATE</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step" id="loop-predict">PREDICT</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step" id="loop-execute">EXECUTE</span>
+        </div>
+
+        <div class="status-row">
+          <span class="status-key">Workflow Step</span>
+          <span class="status-val" id="s-step"><span class="step-badge">IDLE</span></span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Route</span>
+          <span class="status-val" id="s-route">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Target Date</span>
+          <span class="status-val" id="s-target-date">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Current Date</span>
+          <span class="status-val" id="s-current-date">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Date Availability</span>
+          <span class="status-val" id="s-date-avail">UNKNOWN</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Schedule</span>
+          <span class="status-val" id="s-schedule">UNKNOWN</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Seats</span>
+          <span class="status-val" id="s-seats">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Retry Count</span>
+          <span class="status-val" id="s-retry">0</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Cycle / Monitor</span>
+          <span class="status-val" id="s-cycles">0 / 0</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Next Check</span>
+          <span class="status-val" id="s-next-check">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Error</span>
+          <span class="status-val" id="s-error" style="color:var(--danger);max-width:200px;word-break:break-word;">—</span>
+        </div>
+      </div>
+
+      <!-- Perception + Action Panel -->
+      <div class="panel-section">
+        <div class="section-header">🧠 VLM Output</div>
+
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Latest Perception</div>
+        <div class="json-display" id="perception-display">Waiting for agent...</div>
+
+        <div style="font-size:11px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">Latest Action</div>
+        <div class="action-display" id="action-display">
+          <div style="color:var(--text-muted);font-size:12px;">Waiting for agent...</div>
+        </div>
+
+        <div style="font-size:11px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">
+          Latest Screenshot <span style="font-size:10px;">(click to open)</span>
+        </div>
+        <a id="screenshot-link" href="#" target="_blank">
+          <img id="screenshot-thumb" class="screenshot-thumb" src="" alt="No screenshot yet" style="display:none;">
+        </a>
+        <div id="no-screenshot" style="font-size:12px;color:var(--text-muted);">No screenshot yet</div>
+      </div>
+    </div>
+
+    <!-- Log stream -->
+    <div class="log-area" id="log-area">
+      <div class="log-line">
+        <span class="log-time">--:--:--</span>
+        <span class="log-step">READY</span>
+        <span class="log-msg">EDR VLM Agent control panel loaded. Configure and click Start.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── State ───
+  let ws = null;
+  let isRunning = false;
+  let loopPhase = 0;
+
+  const LOOP_STEPS = ['loop-observe', 'loop-perceive', 'loop-update', 'loop-predict', 'loop-execute'];
+  const STEP_COLORS = {
+    'IDLE': '', 'NAVIGATING': 'info', 'FILLING_FORM': 'info',
+    'CHECKING_DATE': 'info', 'SEARCHING': 'info', 'INSPECTING_SEATS': 'info',
+    'APPLYING_POLICY': 'warning', 'BOOKING': 'info', 'WAITING_FOR_HUMAN': 'warning',
+    'MONITORING': 'info', 'WAITING_INTERVAL': 'warning',
+    'RETRYING': 'warning', 'FAILED': 'danger', 'TERMINATED': 'danger', 'SUCCESS': '',
+    // Phase 2 deterministic booking steps
+    'SELECTING_SCHEDULE': 'info', 'AUTH_CHECK': 'info',
+    'FAYDA_VERIFICATION': 'warning', 'SEAT_MAP': 'info',
+    'REVIEWING': 'info', 'PAYMENT_HANDOFF': 'warning',
+  };
+
+  // ─── Initialization ───
+  window.addEventListener('load', async () => {
+    // Set default date (tomorrow)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('travel-date').value = tomorrow.toISOString().split('T')[0];
+
+    // Load stations
+    try {
+      const res = await fetch('/api/stations');
+      const data = await res.json();
+      const stations = data.stations;
+      ['origin', 'destination'].forEach(id => {
+        const sel = document.getElementById(id);
+        stations.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          sel.appendChild(opt);
+        });
+      });
+      // Default route
+      document.getElementById('origin').value = 'Lebu';
+      document.getElementById('destination').value = 'Dire Dawa';
+    } catch(e) {
+      appendLog('ERROR', 'INIT', 'Failed to load stations: ' + e.message, true);
+    }
+
+    connectWebSocket();
+  });
+
+  // ─── WebSocket ───
+  function connectWebSocket() {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+    ws.onopen = () => {
+      setConnectionStatus(true);
+      appendLog('INFO', 'WEBSOCKET', 'Connected to agent');
+      // Keepalive ping
+      setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 15000);
+    };
+
+    ws.onclose = () => {
+      setConnectionStatus(false);
+      appendLog('WARN', 'WEBSOCKET', 'Disconnected — retrying in 3s...');
+      setTimeout(connectWebSocket, 3000);
+    };
+
+    ws.onerror = () => {
+      setConnectionStatus(false);
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'cycle_event') handleCycleEvent(msg.data);
+        else if (msg.type === 'state_sync') updateStatusPanel(msg.data);
+      } catch(e) {
+        console.error('WS parse error:', e);
+      }
+    };
+  }
+
+  function setConnectionStatus(connected) {
+    document.getElementById('conn-dot').className = 'connection-dot' + (connected ? ' connected' : '');
+    document.getElementById('conn-label').textContent = connected ? 'Connected' : 'Disconnected';
+  }
+
+  // ─── Handle cycle events ───
+  function handleCycleEvent(data) {
+    const { cycle_number, timestamp, workflow_step, perception,
+            action, state_summary, screenshot_path, log_message, is_error } = data;
+
+    // Update status panel
+    if (state_summary) updateStatusPanel(state_summary);
+
+    // Update perception display
+    if (perception) {
+      const p = perception;
+      const perceptionObj = {
+        current_page: p.current_page,
+        date_state: p.date_state,
+        schedule_state: p.schedule_state,
+        available_seats: p.available_seats,
+        preferred_seat_available: p.preferred_seat_available,
+        requires_human: p.requires_human,
+        confidence: p.confidence,
+        raw_description: p.raw_description,
+      };
+      document.getElementById('perception-display').textContent =
+        JSON.stringify(perceptionObj, null, 2);
+    }
+
+    // Update action display
+    if (action) {
+      const aDiv = document.getElementById('action-display');
+      const colorMap = {
+        CLICK: '#60a5fa', TYPE: '#34d399', SELECT: '#a78bfa',
+        SCROLL: '#f59e0b', WAIT: '#6b7280', NAVIGATE: '#34d399',
+        STOP: '#ef4444', HUMAN_HANDOFF: '#f59e0b'
+      };
+      const color = colorMap[action.action_type] || '#8892a4';
+      aDiv.innerHTML = `
+        <div class="action-type-badge" style="background:${color}20;color:${color}">
+          ${action.action_type}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+          ${action.target_selector ? `<code style="color:var(--accent)">${action.target_selector}</code>` : ''}
+          ${action.value ? `<span style="color:var(--text)"> → "${action.value}"</span>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);">${action.reason}</div>
+        <div style="font-size:10px;color:var(--border);margin-top:3px;">
+          Confidence: ${(action.confidence * 100).toFixed(0)}%
+        </div>
+      `;
+    }
+
+    // Update screenshot
+    if (screenshot_path) {
+      const filename = screenshot_path.split('/').pop();
+      const url = `/screenshots/${filename}`;
+      const thumb = document.getElementById('screenshot-thumb');
+      thumb.src = url + '?t=' + Date.now();
+      thumb.style.display = 'block';
+      document.getElementById('screenshot-link').href = url;
+      document.getElementById('no-screenshot').style.display = 'none';
+    }
+
+    // Advance feedback loop visualizer
+    advanceLoopViz();
+
+    // Log the event
+    const time = new Date(timestamp).toLocaleTimeString();
+    const cls = is_error ? 'error' : (log_message.includes('✅') ? 'success' : '');
+    appendLog(time, workflow_step, `[Cycle ${cycle_number}] ${log_message}`, is_error);
+
+    // Show handoff banner
+    if (state_summary && state_summary.waiting_for_human) {
+      const banner = document.getElementById('handoff-banner');
+      banner.classList.add('visible');
+      document.getElementById('handoff-reason').textContent =
+        state_summary.human_handoff_reason || 'Please complete the verification/payment in the browser';
+    }
+  }
+
+  function updateStatusPanel(s) {
+    if (!s) return;
+
+    // Step badge
+    const stepColor = STEP_COLORS[s.workflow_step] || '';
+    document.getElementById('s-step').innerHTML =
+      `<span class="step-badge ${stepColor}">${s.workflow_step}</span>`;
+
+    document.getElementById('s-route').textContent =
+      (s.origin && s.destination) ? `${s.origin} → ${s.destination}` : '—';
+    document.getElementById('s-target-date').textContent = s.target_date || '—';
+    document.getElementById('s-current-date').textContent = s.current_date || '—';
+    document.getElementById('s-date-avail').textContent = s.date_availability || '—';
+    document.getElementById('s-schedule').textContent = s.schedule_availability || '—';
+
+    const seats = s.seat_availability || {};
+    const seatsStr = Object.entries(seats).map(([k,v]) => `${k}:${v?'✅':'❌'}`).join(' ') || '—';
+    document.getElementById('s-seats').textContent = seatsStr;
+
+    document.getElementById('s-retry').textContent = s.retry_count ?? 0;
+    document.getElementById('s-cycles').textContent =
+      `${s.cycle_count ?? 0} / ${s.monitoring_cycle ?? 0}`;
+
+    const nextCheck = s.next_check_time
+      ? new Date(s.next_check_time).toLocaleTimeString()
+      : '—';
+    document.getElementById('s-next-check').textContent = nextCheck;
+    document.getElementById('s-error').textContent = s.error || '—';
+
+    // ── Fayda handoff banner ──
+    // Show the amber resume panel only when the agent is paused at the Fayda step.
+    const faydaBanner = document.getElementById('handoff-fayda-banner');
+    if (faydaBanner) {
+      faydaBanner.style.display = (s.handoff_stage === 'FAYDA') ? 'block' : 'none';
+    }
+
+    // Update button states
+    const running = s.workflow_step !== 'IDLE' && s.workflow_step !== 'FAILED'
+                    && s.workflow_step !== 'TERMINATED' && s.workflow_step !== 'SUCCESS'
+                    && s.workflow_step !== 'PAYMENT_HANDOFF'
+                    && !s.terminated;
+    isRunning = running;
+    document.getElementById('btn-start').disabled = running;
+    document.getElementById('btn-stop').disabled = !running;
+  }
+
+  // ─── Feedback loop visualizer ───
+  function advanceLoopViz() {
+    LOOP_STEPS.forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(LOOP_STEPS[loopPhase]).classList.add('active');
+    loopPhase = (loopPhase + 1) % LOOP_STEPS.length;
+  }
+
+  // ─── Mode change ───
+  function onModeChange() {
+    const mode = document.getElementById('booking-mode').value;
+    document.getElementById('seat-ranking-section').style.display =
+      mode === 'DATE_FIRST' ? 'block' : 'none';
+  }
+
+  // ─── Start agent ───
+  async function startAgent() {
+    const origin = document.getElementById('origin').value;
+    const destination = document.getElementById('destination').value;
+    const travelDate = document.getElementById('travel-date').value;
+    const preferredSeat = document.getElementById('preferred-seat').value;
+    const bookingMode = document.getElementById('booking-mode').value;
+    const runMode = document.getElementById('run-mode').value;
+    const interval = document.getElementById('monitor-interval').value;
+
+    if (!origin || !destination || !travelDate) {
+      alert('Please fill in origin, destination, and travel date.');
+      return;
+    }
+
+    if (origin === destination) {
+      alert('Origin and destination cannot be the same.');
+      return;
+    }
+
+    // Build seat ranking
+    const seatRanking = bookingMode === 'DATE_FIRST' ? [
+      document.getElementById('rank-1').value,
+      document.getElementById('rank-2').value,
+      document.getElementById('rank-3').value,
+    ] : [preferredSeat];
+
+    document.getElementById('handoff-banner').classList.remove('visible');
+
+    const config = {
+      origin, destination,
+      travel_date: travelDate,
+      preferred_seat: preferredSeat,
+      seat_ranking: seatRanking,
+      booking_mode: bookingMode,
+      run_mode: runMode,
+      monitoring_interval_minutes: parseInt(interval),
+    };
+
+    appendLog(new Date().toLocaleTimeString(), 'START',
+      `Starting agent: ${origin} → ${destination} | ${travelDate} | ${bookingMode} | ${runMode}`);
+
+    try {
+      const res = await fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (data.error) {
+        appendLog('ERROR', 'START', 'Failed: ' + data.error, true);
+      } else {
+        document.getElementById('btn-start').disabled = true;
+        document.getElementById('btn-stop').disabled = false;
+        isRunning = true;
+      }
+    } catch(e) {
+      appendLog('ERROR', 'START', 'Request failed: ' + e.message, true);
+    }
+  }
+
+  // ─── Stop agent ───
+  async function stopAgent() {
+    try {
+      await fetch('/api/stop', { method: 'POST' });
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = true;
+      document.getElementById('handoff-fayda-banner').style.display = 'none';
+      isRunning = false;
+      appendLog(new Date().toLocaleTimeString(), 'STOP', 'Stop requested');
+    } catch(e) {
+      appendLog('ERROR', 'STOP', 'Request failed: ' + e.message, true);
+    }
+  }
+
+  // ─── Resume agent after Fayda handoff ───
+  async function resumeAgent() {
+    try {
+      const res = await fetch('/api/resume', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        appendLog('ERROR', 'RESUME', 'Failed: ' + data.error, true);
+      } else {
+        document.getElementById('handoff-fayda-banner').style.display = 'none';
+        appendLog(new Date().toLocaleTimeString(), 'RESUME', '▶ Resuming booking workflow after Fayda verification...');
+      }
+    } catch(e) {
+      appendLog('ERROR', 'RESUME', 'Request failed: ' + e.message, true);
+    }
+  }
+
+  // ─── Log helper ───
+  function appendLog(time, step, msg, isError = false) {
+    const logArea = document.getElementById('log-area');
+    const line = document.createElement('div');
+    const cls = isError ? 'error' : (msg.includes('✅') ? 'success' : (msg.includes('⚠️') ? 'warn' : ''));
+    line.className = `log-line ${cls}`;
+    line.innerHTML = `
+      <span class="log-time">${time}</span>
+      <span class="log-step">${step}</span>
+      <span class="log-msg">${escapeHtml(msg)}</span>
+    `;
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+
+    // Keep last 200 lines
+    while (logArea.children.length > 200) logArea.removeChild(logArea.firstChild);
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

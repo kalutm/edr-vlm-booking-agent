@@ -1,0 +1,175 @@
+"""
+vlm/schemas.py — Pydantic schemas for all VLM inputs and outputs.
+
+These are the structured data contracts between the application and the VLM.
+The VLM must return data that matches these schemas — enforced via Gemini's
+response_schema parameter.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Optional
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------------------------
+# Enums used in VLM outputs
+# ---------------------------------------------------------------------------
+
+class PageType(str, Enum):
+    HOME = "HOME"
+    SEARCH_RESULTS = "SEARCH_RESULTS"
+    # Post-search booking funnel pages (deterministic Playwright steps)
+    AUTH_CHECK = "AUTH_CHECK"                      # /booking/auth-check — guest vs account choice
+    PASSENGERS = "PASSENGERS"                      # /booking/passengers — Fayda ID verification
+    SEAT_MAP = "SEAT_MAP"                          # /booking/seats — seat assignment/map
+    REVIEW = "REVIEW"                              # /booking/review — final review before pay
+    # Legacy / general
+    SEAT_SELECTION = "SEAT_SELECTION"
+    PASSENGER_DETAILS = "PASSENGER_DETAILS"
+    PAYMENT = "PAYMENT"
+    VERIFICATION = "VERIFICATION"
+    BOOKING_CONFIRMATION = "BOOKING_CONFIRMATION"
+    ERROR_PAGE = "ERROR_PAGE"
+    UNKNOWN = "UNKNOWN"
+
+
+class DateAvailability(str, Enum):
+    AVAILABLE = "AVAILABLE"        # Date is selectable / open for booking
+    NOT_YET_OPEN = "NOT_YET_OPEN"  # Valid route day but booking not open yet
+    INVALID = "INVALID"            # Not an operating day for this route
+    UNKNOWN = "UNKNOWN"            # Cannot determine from the screenshot
+
+
+class ScheduleAvailability(str, Enum):
+    SCHEDULE_FOUND = "SCHEDULE_FOUND"   # At least one train found
+    SCHEDULE_FULL = "SCHEDULE_FULL"     # Trains exist but all full
+    NO_RESULTS = "NO_RESULTS"           # No schedules returned at all
+    UNKNOWN = "UNKNOWN"
+
+
+class ActionType(str, Enum):
+    CLICK = "CLICK"
+    TYPE = "TYPE"
+    SELECT = "SELECT"
+    SCROLL = "SCROLL"
+    WAIT = "WAIT"
+    NAVIGATE = "NAVIGATE"
+    STOP = "STOP"
+    HUMAN_HANDOFF = "HUMAN_HANDOFF"
+    FILL_SEARCH_FORM = "FILL_SEARCH_FORM"  # Triggers deterministic form-fill helper
+
+
+# ---------------------------------------------------------------------------
+# VLM Output: Perception Result
+# ---------------------------------------------------------------------------
+
+class SeatInfo(BaseModel):
+    seat_type: str = Field(description="Name of the seat class (e.g. Regular, Economy, VIP)")
+    available: bool = Field(description="Whether this seat type has availability")
+    count: Optional[int] = Field(default=None, description="Number of available seats if visible")
+    price: Optional[str] = Field(default=None, description="Price shown for this seat type")
+
+
+class VisibleControl(BaseModel):
+    label: str = Field(description="Human-readable label of the control (button text, input label, etc.)")
+    control_type: str = Field(description="Type: button, input, dropdown, calendar, link, etc.")
+    selector_hint: str = Field(description="CSS selector or descriptive locator hint for Playwright")
+    is_enabled: bool = Field(default=True, description="Whether the control appears interactive")
+
+
+class PerceptionResult(BaseModel):
+    """
+    Structured output from the Visual Perception Module.
+    Represents what the VLM understands about the current browser state.
+    """
+    current_page: PageType = Field(description="Which page/screen is currently visible")
+    date_state: DateAvailability = Field(
+        default=DateAvailability.UNKNOWN,
+        description="State of the target date in the calendar or search results"
+    )
+    schedule_state: ScheduleAvailability = Field(
+        default=ScheduleAvailability.UNKNOWN,
+        description="State of train schedule availability"
+    )
+    available_seats: list[SeatInfo] = Field(
+        default_factory=list,
+        description="List of seat types visible on screen with their availability"
+    )
+    preferred_seat_available: Optional[bool] = Field(
+        default=None,
+        description="Whether the user's preferred seat type is available"
+    )
+    visible_controls: list[VisibleControl] = Field(
+        default_factory=list,
+        description="Key interactive controls visible on the current page"
+    )
+    requires_human: bool = Field(
+        default=False,
+        description="True if the page requires human action (identity verification, payment, CAPTCHA)"
+    )
+    error_message: Optional[str] = Field(
+        default=None,
+        description="Any error or warning message visible on screen"
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0, le=1.0,
+        description="VLM confidence in this perception (0.0-1.0)"
+    )
+    raw_description: str = Field(
+        default="",
+        description="Brief free-text description of what is visible, for logging/debugging"
+    )
+
+
+# ---------------------------------------------------------------------------
+# VLM Output: Predicted Action
+# ---------------------------------------------------------------------------
+
+class PredictedAction(BaseModel):
+    """
+    Structured output from the Action Prediction Module.
+    Represents the next browser action the agent should take.
+    """
+    action_type: ActionType = Field(description="The type of action to perform")
+    target_selector: Optional[str] = Field(
+        default=None,
+        description="CSS selector or Playwright locator for the target element"
+    )
+    target_coordinates: Optional[list[float]] = Field(
+        default=None,
+        description="[x, y] pixel coordinates if selector is not available"
+    )
+    value: Optional[str] = Field(
+        default=None,
+        description="Text to type, option to select, or URL to navigate to"
+    )
+    reason: str = Field(description="Explanation of why this action was chosen")
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0, le=1.0,
+        description="VLM confidence in this action (0.0-1.0)"
+    )
+    fallback_selector: Optional[str] = Field(
+        default=None,
+        description="Alternative selector to try if primary selector fails"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal event types (for WebSocket broadcast to UI)
+# ---------------------------------------------------------------------------
+
+class CycleEvent(BaseModel):
+    """Emitted after each feedback loop cycle for UI updates."""
+    cycle_number: int
+    timestamp: str
+    workflow_step: str
+    perception: Optional[PerceptionResult] = None
+    action: Optional[PredictedAction] = None
+    state_summary: dict = Field(default_factory=dict)
+    screenshot_path: Optional[str] = None
+    log_message: str = ""
+    is_error: bool = False

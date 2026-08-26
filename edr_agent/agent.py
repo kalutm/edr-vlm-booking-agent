@@ -1,12 +1,12 @@
 """
-agent.py — Feedback Loop + State Machine (Modules 3 & 4)
+agent.py — State Machine + Booking Orchestrator
 
-The core orchestrator implementing:
-  OBSERVE → PERCEIVE → UPDATE STATE → PREDICT ACTION → EXECUTE → OBSERVE
+Hybrid design:
+  - Playwright owns all navigation, form-filling, and post-search booking steps.
+  - VLM is invoked ONCE per booking attempt, only on the SEARCH_RESULTS page,
+    to read schedule availability and seat counts (unstructured visual data).
 
-This is Module 3 (State Tracking) and Module 4 (Feedback Loop) combined.
-The VLM handles perception and action prediction.
-All state updates and decisions are deterministic application logic.
+This is Module 3 (State Tracking) combined with the booking workflow.
 """
 
 from __future__ import annotations
@@ -16,19 +16,15 @@ import logging
 from datetime import datetime
 from typing import Callable, Optional
 
-from edr_agent.browser.actions import ActionExecutor
 from edr_agent.browser.controller import BrowserController
 from edr_agent.config import UserConfig, settings
 from edr_agent.policy import PolicyAction, PolicyEngine
 from edr_agent.state import AgentState, WorkflowStep
-from edr_agent.vlm.action_predictor import ActionPredictorModule
 from edr_agent.vlm.client import VLMClient
 from edr_agent.vlm.perception import PerceptionModule
 from edr_agent.vlm.schemas import (
-    ActionType,
     CycleEvent,
     DateAvailability,
-    PageType,
     PerceptionResult,
     PredictedAction,
     ScheduleAvailability,
@@ -37,30 +33,23 @@ from edr_agent.vlm.schemas import (
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES_PER_CYCLE = 3
-MAX_CONSECUTIVE_CYCLES = 100  # Safety cap on feedback loop
 
 
 class BookingAgent:
     """
-    The main agent — connects all modules through the feedback loop.
+    The main booking agent.
 
     Architecture:
     - BrowserController: manages Playwright browser
-    - PerceptionModule: screenshot → PerceptionResult (VLM)
-    - ActionPredictorModule: state + perception → PredictedAction (VLM)
-    - ActionExecutor: PredictedAction → browser action
+    - PerceptionModule: screenshot → PerceptionResult (VLM, SEARCH_RESULTS only)
     - PolicyEngine: deterministic policy decisions
-    - AgentState: the ground truth state (Module 3)
-
-    The feedback loop (Module 4):
-    OBSERVE → PERCEIVE → UPDATE STATE → PREDICT ACTION → EXECUTE → repeat
+    - AgentState: the ground truth state
     """
 
     def __init__(self) -> None:
         self.vlm = VLMClient()
         self.browser = BrowserController()
         self.perception = PerceptionModule(self.vlm)
-        self.predictor = ActionPredictorModule(self.vlm)
         self.policy = PolicyEngine()
         self.state: Optional[AgentState] = None
         self._event_callback: Optional[Callable[[CycleEvent], None]] = None
@@ -164,10 +153,16 @@ class BookingAgent:
         """
         Execute the booking workflow state machine.
 
+        Hybrid design — Playwright handles all navigation/form-filling;
+        VLM is only used to read unstructured data on SEARCH_RESULTS.
+
         States:
-        IDLE → NAVIGATING → FILLING_FORM → CHECKING_DATE
-             → SEARCHING → INSPECTING_SEATS → APPLYING_POLICY
+        IDLE → NAVIGATING → FILLING_FORM → SEARCHING → APPLYING_POLICY
              → BOOKING → WAITING_FOR_HUMAN | SUCCESS | FAILED
+
+        Date validation is handled deterministically inside _fill_booking_form:
+        if the calendar day is unclickable, it sets date_availability and
+        terminates the cycle — no VLM perception call is needed.
         """
         state = self.state
 
@@ -177,36 +172,19 @@ class BookingAgent:
         if state.terminated:
             return
 
-        # STEP 2: Fill the booking form
+        # STEP 2: Fill the booking form (Playwright — includes date validation)
         state.transition(WorkflowStep.FILLING_FORM)
         await self._fill_booking_form()
         if state.terminated:
             return
 
-        # STEP 3: Check date availability via VLM perception
-        state.transition(WorkflowStep.CHECKING_DATE)
-        await self._check_date_availability()
-        if state.terminated:
-            return
-
-        # STEP 4: Apply date-level policy
-        await self._apply_date_policy()
-        if state.terminated:
-            return
-
-        # STEP 5: Search for schedules
+        # STEP 3: Single VLM pass — read schedule + seats from SEARCH_RESULTS
         state.transition(WorkflowStep.SEARCHING)
-        await self._search_schedules()
+        await self._perceive_search_results()
         if state.terminated:
             return
 
-        # STEP 6: Inspect seats
-        state.transition(WorkflowStep.INSPECTING_SEATS)
-        await self._inspect_seats()
-        if state.terminated:
-            return
-
-        # STEP 7: Apply seat policy
+        # STEP 4: Apply seat policy
         state.transition(WorkflowStep.APPLYING_POLICY)
         await self._apply_seat_policy()
 
@@ -238,25 +216,26 @@ class BookingAgent:
 
     async def _fill_booking_form(self) -> None:
         """
-        Fill the EDR booking form using deterministic helpers + VLM for date selection.
-        
-        The station fields use a known pattern (autocomplete), so we handle those
-        deterministically via EDRFormHelper. The VLM is used for validation and
-        for any unexpected UI states.
+        Fill the EDR booking form deterministically using EDRFormHelper.
+
+        Playwright handles all station autocomplete, date selection, and form
+        submission. No VLM is involved here.
+        If the calendar day is unclickable, EDRFormHelper returns date_blocked=True
+        and this method terminates the cycle cleanly.
         """
         from edr_agent.browser.edr_forms import EDRFormHelper
         state = self.state
 
         form = EDRFormHelper(self.browser.page)
 
-        # Check we're on the home page
+        # Ensure we're on the home page before filling
         if not await form.is_on_home_page():
             logger.info("[AGENT] Not on home page, navigating...")
             await self._navigate_with_retry(settings.edr_base_url)
             if state.terminated:
                 return
 
-        # Deterministically fill the form
+        # Deterministically fill origin, destination, date, and submit
         results = await form.fill_booking_form(
             origin=state.origin,
             destination=state.destination,
@@ -265,10 +244,8 @@ class BookingAgent:
         logger.info(f"[AGENT] Form fill results: {results}")
 
         # --- Date-blocked guard ---
-        # If fill_booking_form returned early because the calendar day was unclickable
-        # (disabled/not-yet-open), treat this as a NOT_YET_OPEN availability result.
-        # The calendar modal has already been closed inside EDRFormHelper; the page is
-        # safe. We emit a clear notification and terminate the monitoring cycle cleanly.
+        # If the calendar day was unclickable (not-yet-open), EDRFormHelper signals
+        # this via date_blocked. We record the state and end the cycle — no VLM needed.
         if results.get("date_blocked"):
             target = state.current_date.isoformat() if state.current_date else "requested date"
             msg = (
@@ -281,137 +258,49 @@ class BookingAgent:
             state.terminated = True
             return
 
-        # Take screenshot and verify with VLM
-        screenshot, path = await self.browser.screenshot("form_filled")
-        state.last_screenshot_path = path
-
-        # Artificial pacing delay (3s) to prevent hitting Free Tier RPM ceiling
-        await asyncio.sleep(3.0)
-
-        perception = self.perception.perceive(
-            screenshot,
-            origin=state.origin,
-            destination=state.destination,
-            target_date=state.current_date,
-            preferred_seat=state.preferred_seat.value,
-            workflow_step="FILLING_FORM",
-        )
-        state.last_perception = perception
-
-        self._emit_event(
-            perception=perception,
-            screenshot_path=path,
-            log_message=f"Form filled — now on: {perception.current_page.value}",
-        )
-
-        # If VLM says we're still on HOME, try clicking Search
-        if perception.current_page.value == "HOME":
-            success = await form.click_search()
-            if success:
-                await self.browser.screenshot("after_search")
-                logger.info("[AGENT] Search clicked from HOME page")
-
-
-    async def _check_date_availability(self) -> None:
+    async def _perceive_search_results(self) -> None:
         """
-        Check whether the target date is available/selectable.
-        The VLM visually inspects the calendar/date picker.
+        Single VLM perception pass on the SEARCH_RESULTS page.
+
+        Reads both schedule availability and seat counts in one API call.
+        Previously this was split across _search_schedules() + _inspect_seats(),
+        which took two screenshots and made two identical API calls on the same page.
         """
-        screenshot, path = await self.browser.screenshot("check_date")
-        await asyncio.sleep(3.0)
-        result = self.perception.perceive(
-            screenshot,
-            origin=self.state.origin,
-            destination=self.state.destination,
-            target_date=self.state.current_date,
-            preferred_seat=self.state.preferred_seat.value,
-            workflow_step="CHECKING_DATE",
-        )
-        self.state.last_perception = result
-        self.state.last_screenshot_path = path
+        # Wait for the search results to actually render.
+        # The EDR site is an SPA — wait_for_load_state("networkidle") returns
+        # immediately after click_search()'s 2s sleep, before results are painted.
+        # Instead, wait for either: a 'Select' button (results loaded) or a
+        # no-results/error indicator — whichever appears first.
+        try:
+            await self.browser.page.wait_for_selector(
+                "button:has-text('Select'), "
+                ":has-text('No trains found'), "
+                ":has-text('No results'), "
+                "[data-testid='select-schedule']",
+                timeout=15000,
+            )
+            logger.info("[AGENT] Search results page ready")
+        except Exception as e:
+            logger.warning(f"[AGENT] Results page ready-check timed out — proceeding: {e}")
 
-        # Update date availability from perception
-        if result.date_state != DateAvailability.UNKNOWN:
-            self.state.date_availability = result.date_state
-
-        self._emit_event(
-            perception=result,
-            screenshot_path=path,
-            log_message=f"Date availability: {self.state.date_availability.value}",
-        )
-
-    async def _apply_date_policy(self) -> None:
-        """Apply policy based on date availability."""
-        decision = self.policy.evaluate(self.state)
-        logger.info(f"[AGENT] Policy decision: {decision.action.value} — {decision.reason}")
-
-        if decision.action == PolicyAction.WAIT_AND_RETRY:
-            self._emit_event(log_message=decision.notification_message)
-            # Date not open yet — this monitoring cycle is done
-            self.state.terminated = True
-
-        elif decision.action == PolicyAction.NOTIFY_AND_STOP:
-            self._emit_event(log_message=decision.notification_message, is_error=True)
-            self.state.transition(WorkflowStep.FAILED)
-            self.state.terminated = True
-            self.state.monitoring_active = False
-
-        elif decision.action == PolicyAction.ADVANCE_DATE and decision.new_date:
-            logger.info(f"[AGENT] Advancing date: {self.state.current_date} → {decision.new_date}")
-            self.state.current_date = decision.new_date
-            self._emit_event(log_message=decision.notification_message)
-            # Re-navigate with new date
-            self.state.transition(WorkflowStep.FILLING_FORM)
-            await self._fill_booking_form()
-
-    async def _search_schedules(self) -> None:
-        """Search for train schedules and perceive results."""
         screenshot, path = await self.browser.screenshot("search_results")
-        await asyncio.sleep(3.0)
+        await asyncio.sleep(3.0)  # Rate-limit pacing before VLM call
+
         result = self.perception.perceive(
             screenshot,
             origin=self.state.origin,
             destination=self.state.destination,
             target_date=self.state.current_date,
             preferred_seat=self.state.preferred_seat.value,
-            workflow_step="SEARCHING",
         )
         self.state.last_perception = result
         self.state.last_screenshot_path = path
 
+        # Update schedule availability
         if result.schedule_state != ScheduleAvailability.UNKNOWN:
             self.state.schedule_availability = result.schedule_state
 
-        self._emit_event(
-            perception=result,
-            screenshot_path=path,
-            log_message=f"Schedule state: {self.state.schedule_availability.value}",
-        )
-
-        # If no schedule found, apply policy
-        if self.state.schedule_availability in (
-            ScheduleAvailability.NO_RESULTS,
-            ScheduleAvailability.SCHEDULE_FULL,
-        ):
-            decision = self.policy.evaluate(self.state)
-            await self._apply_policy_decision(decision)
-
-    async def _inspect_seats(self) -> None:
-        """Inspect available seat types from the search results."""
-        screenshot, path = await self.browser.screenshot("seat_inspection")
-        await asyncio.sleep(3.0)
-        result = self.perception.perceive(
-            screenshot,
-            origin=self.state.origin,
-            destination=self.state.destination,
-            target_date=self.state.current_date,
-            preferred_seat=self.state.preferred_seat.value,
-            workflow_step="INSPECTING_SEATS",
-        )
-        self.state.last_perception = result
-        self.state.last_screenshot_path = path
-
-        # Update seat availability from perception
+        # Update seat availability
         for seat_info in result.available_seats:
             self.state.seat_availability[seat_info.seat_type] = seat_info.available
 
@@ -423,8 +312,19 @@ class BookingAgent:
         self._emit_event(
             perception=result,
             screenshot_path=path,
-            log_message=f"Seat availability: {self.state.seat_availability}",
+            log_message=(
+                f"Schedule: {self.state.schedule_availability.value} | "
+                f"Seats: {self.state.seat_availability}"
+            ),
         )
+
+        # If no schedule found, apply policy immediately
+        if self.state.schedule_availability in (
+            ScheduleAvailability.NO_RESULTS,
+            ScheduleAvailability.SCHEDULE_FULL,
+        ):
+            decision = self.policy.evaluate(self.state)
+            await self._apply_policy_decision(decision)
 
     async def _apply_seat_policy(self) -> None:
         """Apply the booking policy based on seat availability."""
@@ -758,157 +658,6 @@ class BookingAgent:
         self._emit_event(log_message=final_msg)
         logger.info(f"[AGENT] {final_msg}")
 
-    # ---------------------------------------------------------------------------
-    # The Feedback Loop (Module 4)
-    # ---------------------------------------------------------------------------
-
-    async def _feedback_loop(
-        self,
-        goal: str,
-        max_cycles: int,
-        terminal_pages: set[PageType],
-        step_label: str,
-    ) -> None:
-        """
-        The core OBSERVE → PERCEIVE → UPDATE → PREDICT → EXECUTE loop.
-
-        Runs until:
-        - A terminal page is reached
-        - STOP or HUMAN_HANDOFF action is predicted
-        - max_cycles is exhausted
-        - Stop is requested externally
-        """
-        state = self.state
-
-        for cycle in range(max_cycles):
-            if self._stop_requested or state.terminated:
-                break
-
-            state.cycle_count += 1
-
-            # === OBSERVE ===
-            try:
-                screenshot, path = await self.browser.screenshot(f"{step_label}_c{cycle}")
-                state.last_screenshot_path = path
-            except Exception as e:
-                logger.error(f"[LOOP] Screenshot failed: {e}")
-                state.record_failure(str(e))
-                break
-
-            # === PERCEIVE ===
-            try:
-                # Artificial pacing delay (3s) to prevent hitting Free Tier RPM ceiling
-                await asyncio.sleep(3.0)
-
-                perception = self.perception.perceive(
-                    screenshot,
-                    origin=state.origin,
-                    destination=state.destination,
-                    target_date=state.current_date,
-                    preferred_seat=state.preferred_seat.value,
-                    workflow_step=state.workflow_step.value,
-                )
-                state.last_perception = perception
-                state.record_success_cycle()
-            except Exception as e:
-                logger.error(f"[LOOP] Perception failed: {e}")
-                state.record_failure(str(e))
-                await asyncio.sleep(2)
-                continue
-
-            # === UPDATE STATE from perception ===
-            self._update_state_from_perception(perception)
-
-            # Check if we've reached a terminal page
-            if perception.current_page in terminal_pages:
-                self._emit_event(
-                    perception=perception,
-                    screenshot_path=path,
-                    log_message=f"Reached terminal page: {perception.current_page.value}",
-                )
-                break
-
-            # === PREDICT ACTION ===
-            try:
-                action = self.predictor.predict(
-                    screenshot,
-                    perception=perception,
-                    origin=state.origin,
-                    destination=state.destination,
-                    target_date=state.current_date,
-                    preferred_seat=state.preferred_seat.value,
-                    workflow_step=state.workflow_step.value,
-                    goal_description=goal,
-                    retry_count=state.retry_count,
-                )
-                state.last_action = action
-            except Exception as e:
-                logger.error(f"[LOOP] Action prediction failed: {e}")
-                state.record_failure(str(e))
-                await asyncio.sleep(2)
-                continue
-
-            # Emit the full cycle event to UI
-            self._emit_event(
-                perception=perception,
-                action=action,
-                screenshot_path=path,
-                log_message=f"Cycle {cycle+1}: {action.action_type.value} — {action.reason[:60]}",
-            )
-
-            # Check for terminal actions
-            if action.action_type in (ActionType.STOP, ActionType.HUMAN_HANDOFF):
-                if action.action_type == ActionType.HUMAN_HANDOFF:
-                    state.waiting_for_human = True
-                    state.human_handoff_reason = action.reason
-                break
-                
-            if action.action_type == ActionType.FILL_SEARCH_FORM:
-                logger.info("[LOOP] VLM predicted FILL_SEARCH_FORM, executing deterministic fill...")
-                await self._fill_booking_form()
-                state.record_success_cycle()
-                continue
-
-            # === EXECUTE ACTION ===
-            executor = ActionExecutor(self.browser.page)
-            success, msg = await executor.execute(action)
-
-            if not success:
-                logger.warning(f"[LOOP] Action execution failed: {msg}")
-                state.record_failure(msg)
-            else:
-                state.record_success_cycle()
-
-            # Wait for page to settle after action
-            await asyncio.sleep(1.0)
-
-        else:
-            logger.warning(f"[LOOP] Max cycles ({max_cycles}) reached in step: {step_label}")
-
-    def _update_state_from_perception(self, perception: PerceptionResult) -> None:
-        """Update agent state based on what was perceived. Deterministic logic."""
-        state = self.state
-
-        # Update date availability if we have new info
-        if perception.date_state != DateAvailability.UNKNOWN:
-            state.date_availability = perception.date_state
-
-        # Update schedule availability if we have new info
-        if perception.schedule_state != ScheduleAvailability.UNKNOWN:
-            state.schedule_availability = perception.schedule_state
-
-        # Update seat availability from perception
-        for seat_info in perception.available_seats:
-            state.seat_availability[seat_info.seat_type] = seat_info.available
-
-        if perception.preferred_seat_available is not None:
-            state.seat_availability[state.preferred_seat.value] = (
-                perception.preferred_seat_available
-            )
-
-        # Handle human handoff detection
-        if perception.requires_human:
-            state.waiting_for_human = True
 
     # ---------------------------------------------------------------------------
     # Monitoring helpers

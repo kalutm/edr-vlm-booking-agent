@@ -28,15 +28,15 @@ from edr_agent.vlm.schemas import (
 # ---------------------------------------------------------------------------
 
 class WorkflowStep(str, Enum):
+    # Phase 1 — VLM-assisted search (Playwright fills form; VLM reads schedule/seats)
     IDLE = "IDLE"
     NAVIGATING = "NAVIGATING"
-    FILLING_FORM = "FILLING_FORM"
-    CHECKING_DATE = "CHECKING_DATE"
-    SEARCHING = "SEARCHING"
-    INSPECTING_SEATS = "INSPECTING_SEATS"
+    FILLING_FORM = "FILLING_FORM"   # Playwright deterministically fills the search form
+    SEARCHING = "SEARCHING"         # VLM reads SEARCH_RESULTS page for schedules
+    INSPECTING_SEATS = "INSPECTING_SEATS"  # VLM reads seat availability
     APPLYING_POLICY = "APPLYING_POLICY"
     BOOKING = "BOOKING"
-    # Phase 2 — deterministic post-search booking steps
+    # Phase 2 — deterministic post-search booking steps (Playwright only, no VLM)
     SELECTING_SCHEDULE = "SELECTING_SCHEDULE"   # Clicking 'Select' + coach modal on results page
     AUTH_CHECK = "AUTH_CHECK"                   # /booking/auth-check — clicking 'Continue as guest'
     FAYDA_VERIFICATION = "FAYDA_VERIFICATION"   # /booking/passengers — Fayda biometric handoff

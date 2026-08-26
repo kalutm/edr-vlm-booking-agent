@@ -18,21 +18,11 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class PageType(str, Enum):
-    HOME = "HOME"
-    SEARCH_RESULTS = "SEARCH_RESULTS"
-    # Post-search booking funnel pages (deterministic Playwright steps)
-    AUTH_CHECK = "AUTH_CHECK"                      # /booking/auth-check — guest vs account choice
-    PASSENGERS = "PASSENGERS"                      # /booking/passengers — Fayda ID verification
-    SEAT_MAP = "SEAT_MAP"                          # /booking/seats — seat assignment/map
-    REVIEW = "REVIEW"                              # /booking/review — final review before pay
-    # Legacy / general
-    SEAT_SELECTION = "SEAT_SELECTION"
-    PASSENGER_DETAILS = "PASSENGER_DETAILS"
-    PAYMENT = "PAYMENT"
-    VERIFICATION = "VERIFICATION"
-    BOOKING_CONFIRMATION = "BOOKING_CONFIRMATION"
-    ERROR_PAGE = "ERROR_PAGE"
-    UNKNOWN = "UNKNOWN"
+    # Pages the VLM is actually invoked on
+    HOME = "HOME"                   # Main booking search form
+    SEARCH_RESULTS = "SEARCH_RESULTS"  # Train schedule list after searching
+    ERROR_PAGE = "ERROR_PAGE"       # Any error / no-results page
+    UNKNOWN = "UNKNOWN"             # Cannot determine
 
 
 class DateAvailability(str, Enum):
@@ -72,23 +62,12 @@ class SeatInfo(BaseModel):
     price: Optional[str] = Field(default=None, description="Price shown for this seat type")
 
 
-class VisibleControl(BaseModel):
-    label: str = Field(description="Human-readable label of the control (button text, input label, etc.)")
-    control_type: str = Field(description="Type: button, input, dropdown, calendar, link, etc.")
-    selector_hint: str = Field(description="CSS selector or descriptive locator hint for Playwright")
-    is_enabled: bool = Field(default=True, description="Whether the control appears interactive")
-
-
 class PerceptionResult(BaseModel):
     """
     Structured output from the Visual Perception Module.
     Represents what the VLM understands about the current browser state.
     """
     current_page: PageType = Field(description="Which page/screen is currently visible")
-    date_state: DateAvailability = Field(
-        default=DateAvailability.UNKNOWN,
-        description="State of the target date in the calendar or search results"
-    )
     schedule_state: ScheduleAvailability = Field(
         default=ScheduleAvailability.UNKNOWN,
         description="State of train schedule availability"
@@ -100,14 +79,6 @@ class PerceptionResult(BaseModel):
     preferred_seat_available: Optional[bool] = Field(
         default=None,
         description="Whether the user's preferred seat type is available"
-    )
-    visible_controls: list[VisibleControl] = Field(
-        default_factory=list,
-        description="Key interactive controls visible on the current page"
-    )
-    requires_human: bool = Field(
-        default=False,
-        description="True if the page requires human action (identity verification, payment, CAPTCHA)"
     )
     error_message: Optional[str] = Field(
         default=None,

@@ -9,9 +9,8 @@ Built with **Gemini 2.5 Flash** + **Playwright** + **FastAPI**.
 | Module | Description |
 |--------|-------------|
 | **Visual Perception** | Screenshot → Gemini VLM → `PerceptionResult` (structured JSON) |
-| **Action Prediction** | `PerceptionResult` + state → `PredictedAction` (validated enum) |
 | **State Tracking** | Explicit `AgentState` dataclass + `WorkflowStep` state machine |
-| **Feedback Loop** | OBSERVE → PERCEIVE → UPDATE → PREDICT → EXECUTE → repeat |
+| **Feedback Loop** | OBSERVE → PERCEIVE → UPDATE → EXECUTE → repeat |
 
 ## Quick Start
 
@@ -45,13 +44,11 @@ edr_agent/
 ├── policy.py              # NORMAL / SEAT-FIRST / DATE-FIRST policies
 ├── agent.py               # Feedback loop + orchestrator
 ├── browser/
-│   ├── controller.py      # Playwright browser management
-│   └── actions.py         # Validated action executor
+│   └── controller.py      # Playwright browser management
 ├── vlm/
 │   ├── client.py          # Gemini API adapter (swappable)
 │   ├── schemas.py         # Pydantic schemas for all VLM I/O
-│   ├── perception.py      # Visual Perception Module
-│   └── action_predictor.py # Action Prediction Module
+│   └── perception.py      # Visual Perception Module
 └── ui/
     ├── server.py          # FastAPI + WebSocket server
     └── static/

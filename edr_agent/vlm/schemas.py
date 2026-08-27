@@ -39,18 +39,6 @@ class ScheduleAvailability(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class ActionType(str, Enum):
-    CLICK = "CLICK"
-    TYPE = "TYPE"
-    SELECT = "SELECT"
-    SCROLL = "SCROLL"
-    WAIT = "WAIT"
-    NAVIGATE = "NAVIGATE"
-    STOP = "STOP"
-    HUMAN_HANDOFF = "HUMAN_HANDOFF"
-    FILL_SEARCH_FORM = "FILL_SEARCH_FORM"  # Triggers deterministic form-fill helper
-
-
 # ---------------------------------------------------------------------------
 # VLM Output: Perception Result
 # ---------------------------------------------------------------------------
@@ -96,40 +84,6 @@ class PerceptionResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# VLM Output: Predicted Action
-# ---------------------------------------------------------------------------
-
-class PredictedAction(BaseModel):
-    """
-    Structured output from the Action Prediction Module.
-    Represents the next browser action the agent should take.
-    """
-    action_type: ActionType = Field(description="The type of action to perform")
-    target_selector: Optional[str] = Field(
-        default=None,
-        description="CSS selector or Playwright locator for the target element"
-    )
-    target_coordinates: Optional[list[float]] = Field(
-        default=None,
-        description="[x, y] pixel coordinates if selector is not available"
-    )
-    value: Optional[str] = Field(
-        default=None,
-        description="Text to type, option to select, or URL to navigate to"
-    )
-    reason: str = Field(description="Explanation of why this action was chosen")
-    confidence: float = Field(
-        default=0.0,
-        ge=0.0, le=1.0,
-        description="VLM confidence in this action (0.0-1.0)"
-    )
-    fallback_selector: Optional[str] = Field(
-        default=None,
-        description="Alternative selector to try if primary selector fails"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Internal event types (for WebSocket broadcast to UI)
 # ---------------------------------------------------------------------------
 
@@ -139,7 +93,6 @@ class CycleEvent(BaseModel):
     timestamp: str
     workflow_step: str
     perception: Optional[PerceptionResult] = None
-    action: Optional[PredictedAction] = None
     state_summary: dict = Field(default_factory=dict)
     screenshot_path: Optional[str] = None
     log_message: str = ""

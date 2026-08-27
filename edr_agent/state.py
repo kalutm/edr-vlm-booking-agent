@@ -18,7 +18,6 @@ from edr_agent.config import BookingMode, SeatType, UserConfig
 from edr_agent.vlm.schemas import (
     DateAvailability,
     PerceptionResult,
-    PredictedAction,
     ScheduleAvailability,
 )
 
@@ -94,7 +93,6 @@ class AgentState:
 
     # --- Last VLM outputs ---
     last_perception: Optional[PerceptionResult] = None
-    last_action: Optional[PredictedAction] = None
     last_screenshot_path: Optional[str] = None
 
     # --- Monitoring ---
@@ -166,7 +164,6 @@ class AgentState:
         self.schedule_availability = ScheduleAvailability.UNKNOWN
         self.seat_availability = {}
         self.last_perception = None
-        self.last_action = None
         self.error = None
         self.monitoring_cycle += 1
         self.last_updated = datetime.now()

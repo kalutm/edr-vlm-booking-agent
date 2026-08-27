@@ -26,7 +26,6 @@ from edr_agent.vlm.schemas import (
     CycleEvent,
     DateAvailability,
     PerceptionResult,
-    PredictedAction,
     ScheduleAvailability,
 )
 
@@ -432,7 +431,7 @@ class BookingAgent:
         if self.state.terminated or self._stop_requested:
             return
 
-        await self._step_review_and_handoff(form)
+        await self._step_review_and_handoff(for_inspect_seatsm)
 
     # ---------------------------------------------------------------------------
     # Phase 2 — individual deterministic booking step methods
@@ -723,7 +722,6 @@ class BookingAgent:
     def _emit_event(
         self,
         perception: Optional[PerceptionResult] = None,
-        action: Optional[PredictedAction] = None,
         screenshot_path: Optional[str] = None,
         log_message: str = "",
         is_error: bool = False,
@@ -737,7 +735,6 @@ class BookingAgent:
             timestamp=datetime.now().isoformat(),
             workflow_step=self.state.workflow_step.value,
             perception=perception,
-            action=action,
             state_summary=self.state.to_summary_dict(),
             screenshot_path=screenshot_path,
             log_message=log_message,

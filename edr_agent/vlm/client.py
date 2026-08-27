@@ -198,15 +198,6 @@ class VLMClient:
         logger.debug(f"VLM raw response: {raw_text[:300]}...")
         return schema.model_validate_json(raw_text)
 
-    def predict_action(
-        self,
-        screenshot_bytes: bytes,
-        prompt: str,
-        schema: Type[T],
-    ) -> T:
-        """Same as perceive() but semantically for action prediction."""
-        return self.perceive(screenshot_bytes, prompt, schema)
-
     def text_only(self, prompt: str) -> str:
         """Simple text-only call for non-visual tasks."""
         response = self._generate_content_with_retry(

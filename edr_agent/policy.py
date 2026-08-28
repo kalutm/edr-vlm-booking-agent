@@ -1,5 +1,6 @@
 """
 policy.py — Booking Policy Engine
+This can be precieved as the Action Module of the Agent
 
 Implements the three booking policies (NORMAL, SEAT_FIRST, DATE_FIRST).
 All policy logic is deterministic — no VLM involvement here.

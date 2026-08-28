@@ -2,7 +2,9 @@
 .env
 .env.*
 !.env.example
-
+edr_vlm_agent_code_presentation.pdf
+edr-vlm-agent-problem&solution-presentation.pdf
+edr-vlm-booking-agent-flow.jpg
 # Python bytecode and caches
 __pycache__/
 *.py[cod]

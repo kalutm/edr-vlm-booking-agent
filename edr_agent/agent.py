@@ -6,7 +6,7 @@ Hybrid design:
   - VLM is invoked ONCE per booking attempt, only on the SEARCH_RESULTS page,
     to read schedule availability and seat counts (unstructured visual data).
 
-This is Module 3 (State Tracking) combined with the booking workflow.
+This Module is (State Tracking via AgentState dataclass, Feedbackloop) combined with the booking workflow.
 """
 
 from __future__ import annotations

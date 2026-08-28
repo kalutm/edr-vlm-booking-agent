@@ -1,6 +1,6 @@
 """
 state.py — Agent State Machine
-
+This is the State Module (although state isn't tracked here this is the module that dictates what the state should look like)
 Explicit state tracking for the EDR booking agent.
 This is the ground truth of what the agent knows/believes at any moment.
 The VLM's conversation memory is never relied upon for state persistence.

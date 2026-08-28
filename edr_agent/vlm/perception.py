@@ -1,5 +1,5 @@
 """
-vlm/perception.py — Visual Perception Module (Module 1 of 4)
+vlm/perception.py — Visual Perception Module
 
 Input:  browser screenshot (bytes) + task context
 Output: PerceptionResult (structured)
